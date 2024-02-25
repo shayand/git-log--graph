@@ -60,7 +60,7 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 			get: => context.workspaceState.get(key())
 			set: (###* @type any ### v) => context.workspaceState.update(key(), v)
 		###* @type {Record<string, {get:()=>any,set:(value:any)=>any}>} ###
-		kv =
+		special_states = # "Normal" states instead are just default_memento
 			'selected-repo-index':
 				get: => context.workspaceState.get('selected-repo-index')
 				set: (v) =>
@@ -76,7 +76,7 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 			'repo:action-history': repo_state_memento('action-history')
 		default_memento = global_state_memento
 		(###* @type string ### key) =>
-			memento = kv[key] or default_memento(key)
+			memento = special_states[key] or default_memento(key)
 			get: memento.get
 			set: (###* @type any ### value, ###* @type {{broadcast?:boolean}} ### options = {}) =>
 				memento.set(value)
@@ -105,7 +105,9 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 				try
 					resp.data = await func()
 				catch e
-					resp.error = e
+					console.warn e
+					# We can't really just be passing e along here because it might be serialized as empty {}
+					resp.error = e.message || e
 				post_message resp
 			switch message.type
 				when 'request'
@@ -198,7 +200,7 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 	# General start, will choose from creating/show editor panel or showing side nav view depending on config
 	context.subscriptions.push vscode.commands.registerCommand START_CMD, (args) =>
 		log.appendLine "start command"
-		if args?.handle? # invoked via menu scm/title
+		if args?.rootUri # invoked via menu scm/title
 			state('selected-repo-index').set(await git.get_repo_index_for_uri(args.rootUri))
 		if vscode.workspace.getConfiguration(EXT_ID).get('position') == "editor"
 			if webview_container
@@ -217,6 +219,26 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 			log.appendLine "show view"
 			# @ts-ignore
 			webview_container?.show()
+
+	# Close the editor(tab)
+	context.subscriptions.push vscode.commands.registerCommand 'git-log--graph.close', =>
+		if vscode.workspace.getConfiguration(EXT_ID).get('position') != "editor"
+			return vscode.window.showInformationMessage "This command is can only be used if git-log--graph isn't configured as a main editor (tab)."
+		if ! webview_container
+			return vscode.window.showInformationMessage "git-log--graph editor tab is not running."
+		log.appendLine "close command"
+		# @ts-ignore
+		webview_container.dispose()
+
+	# Toggle the editor(tab)
+	context.subscriptions.push vscode.commands.registerCommand 'git-log--graph.toggle', =>
+		if vscode.workspace.getConfiguration(EXT_ID).get('position') != "editor"
+			return vscode.window.showInformationMessage "This command is can only be used if git-log--graph isn't configured as a main editor (tab)."
+		log.appendLine "toggle command"
+		if webview_container
+			# @ts-ignore
+			return webview_container.dispose()
+		vscode.commands.executeCommand(START_CMD)
 
 	# First editor panel creation + show, but automatically after restart / resume previous session.
 	# It would be possible to restore some web view state here too
@@ -265,7 +287,9 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 	vscode.workspace.onDidCloseTextDocument hide_blame
 	vscode.window.onDidChangeActiveTextEditor hide_blame
 	vscode.window.onDidChangeTextEditorSelection ({ textEditor: text_editor }) =>
-		uri = text_editor.document.uri
+		doc = text_editor.document
+		uri = doc.uri
+		return if uri.scheme != 'file' || doc.languageId == 'log' || doc.languageId == 'Log' || uri.path.includes('extension-output') || uri.path.includes(EXT_ID) # vscode/issues/206118
 		return if text_editor.selection.active.line == current_line
 		current_line = text_editor.selection.active.line
 		clearTimeout line_change_debouncer if line_change_debouncer
@@ -288,6 +312,7 @@ module.exports.activate = (###* @type vscode.ExtensionContext ### context) =>
 		current_line_long_hash = ''
 		state('repo:selected-commits-hashes').set([focus_commit_hash])
 		vscode.commands.executeCommand(START_CMD)
+		push_message_id 'scroll-to-selected-commit'
 
 	# public api of this extension:
 	{ git, post_message, webview_container, context, state }

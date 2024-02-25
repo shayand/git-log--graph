@@ -1,7 +1,7 @@
 <template lang="slm">
 / TODO rename to filesdiffs, incl class
 .files-diffs-list
-	h3 Changes
+	h3 Changes ({{ files.length }})
 
 	aside.actions
 		button v-if="render_style==='tree'" @click="render_style='list'" title="View as list"
@@ -16,6 +16,8 @@
 
 	template-file-actions-define v-slot="{ file }"
 		.file-actions.row.align-center
+			button.row.show-file @click.stop="show_file(file.path)" title="Show file history"
+				i.codicon.codicon-history
 			button.row.view-rev @click.stop="$emit('view_rev',file.path)" title="View File at this Revision"
 				i.codicon.codicon-git-commit
 			button.row.open-file @click.stop="open_file(file.path)" title="Open file"

@@ -1,7 +1,7 @@
 {
 	"name": "git-log--graph",
 	"description": "git log --graph, an interactive Git Graph frontend",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"icon": "img/logo.png",
 	"publisher": "phil294",
 	"private": false,
@@ -29,6 +29,18 @@
 			{
 				"command": "git-log--graph.start",
 				"title": "Open graph view",
+				"category": "git log --graph",
+				"icon": "$(git-branch)"
+			},
+			{
+				"command": "git-log--graph.close",
+				"title": "Close graph tab",
+				"category": "git log --graph",
+				"icon": "$(git-branch)"
+			},
+			{
+				"command": "git-log--graph.toggle",
+				"title": "Toggle graph tab",
 				"category": "git log --graph",
 				"icon": "$(git-branch)"
 			},

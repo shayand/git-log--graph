@@ -1,6 +1,6 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import * as store from './store.coffee'
-import { show_error_message } from '../bridge.coffee'
+import { show_error_message, add_push_listener } from '../bridge.coffee'
 import { is_truthy } from './types'
 import GitInputModel from './GitInput.coffee'
 import GitInput from './GitInput.vue'
@@ -61,18 +61,21 @@ export default
 		txt_filter = ref ''
 		###* @type {Ref<'filter' | 'jump'>} ###
 		txt_filter_type = ref 'filter'
+		txt_filter_regex = store.stateful_computed 'filter-options-regex', false
 		clear_filter = =>
 			txt_filter.value = ''
 			if selected_commit.value
-				selected_i = filtered_commits.value.findIndex (c) => c == selected_commit.value
 				await nextTick()
-				scroll_to_item_centered selected_i
+				scroll_to_commit selected_commit.value
 		###* @type {Ref<HTMLElement | null>} ###
 		txt_filter_ref = ref null
 		txt_filter_filter = (###* @type Commit ### commit) =>
 			search_for = txt_filter.value.toLowerCase()
-			for str from [commit.subject, commit.hash, commit.author_name, commit.author_email, commit.branch?.id]
-				return true if str?.includes(search_for)
+			for str from [commit.subject, commit.hash_long, commit.author_name, commit.author_email, ...commit.refs.map((r)=>r.id)].map((s)=>s.toLowerCase())
+				if txt_filter_regex.value
+					return true if try str?.match(search_for)
+				else
+					return true if str?.includes(search_for)
 		initialized = computed =>
 			!! store.commits.value
 		filtered_commits = computed =>
@@ -81,8 +84,10 @@ export default
 			(store.commits.value or []).filter txt_filter_filter
 		txt_filter_last_i = -1
 		document.addEventListener 'keyup', (e) =>
-			if e.ctrlKey and e.key == 'f'
+			if e.key == 'F3' || e.ctrlKey and e.key == 'f'
 				txt_filter_ref.value?.focus()
+			if txt_filter.value && e.key == 'r' && e.altKey
+				txt_filter_regex.value = ! txt_filter_regex.value
 		select_searched_commit_debouncer = -1
 		txt_filter_enter = (###* @type KeyboardEvent ### event) =>
 			return if txt_filter_type.value == 'filter'
@@ -133,18 +138,24 @@ export default
 			# else
 			# 	store.push_history type: 'branch_id', value: branch.id
 			store.push_history type: 'commit_hash', value: commit.hash
-		scroll_to_commit = (###* @type string ### hash) =>
+		scroll_to_commit_hash = (###* @type string ### hash) =>
 			commit_i = filtered_commits.value.findIndex (commit) =>
 				commit.hash == hash
 			if commit_i == -1
+				console.log new Error().stack
 				return show_error_message "No commit found for hash #{hash}. No idea why :/"
 			scroll_to_item_centered commit_i
 			selected_commits.value = [filtered_commits.value[commit_i]]
-		scroll_to_commit_user = (###* @type string ### hash) =>
-			scroll_to_commit hash
+		scroll_to_commit_hash_user = (###* @type string ### hash) =>
+			scroll_to_commit_hash hash
 			store.push_history type: 'commit_hash', value: hash
+		scroll_to_commit = (###* @type Commit ### commit) =>
+			commit_i = filtered_commits.value.findIndex (c) => c == commit
+			scroll_to_item_centered commit_i
 		scroll_to_top = =>
 			commits_scroller_ref.value?.scrollToItem 0
+		add_push_listener 'scroll-to-selected-commit', =>
+			scroll_to_commit selected_commit.value
 
 
 
@@ -180,7 +191,7 @@ export default
 			if is_first_log_run
 				first_selected_hash = selected_commits.value[0]?.hash
 				if first_selected_hash
-					scroll_to_commit first_selected_hash
+					scroll_to_commit_hash first_selected_hash
 				is_first_log_run = false
 			else
 				if selected_commit.value
@@ -329,7 +340,7 @@ export default
 			commits_scroller_updated
 			commits_scroller_ref
 			scroll_to_branch_tip
-			scroll_to_commit_user
+			scroll_to_commit_hash_user
 			scroll_to_top
 			selected_commit
 			selected_commits
@@ -354,4 +365,5 @@ export default
 			scroller_on_keydown
 			config_show_quick_branch_tips
 			scroll_item_height
+			txt_filter_regex
 		}

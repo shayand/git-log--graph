@@ -16,7 +16,7 @@
 			progress.diff v-if="commit.stats" :value="(commit.stats.insertions / (commit.stats.insertions + commit.stats.deletions)) || 0" title="Ratio insertions / deletions"
 		.datetime.flex-noshrink.align-center {{ commit.datetime }}
 		button
-			.hash.flex-noshrink {{ commit.hash }}
+			.hash.flex-noshrink :title="commit.hash_long" {{ commit.hash }}
 </template>
 
 <script lang="coffee">
@@ -36,8 +36,8 @@ export default
 		height:
 			type: Number
 	setup: (props) ->
-		vis_min_width = 210
-		vis_max_width_vw = 60
+		vis_min_width = 15
+		vis_max_width_vw = 90
 		vis_style = computed =>
 			width: vis_width.value + 'px'
 			'max-width': vis_max_width_vw + 'vw'
